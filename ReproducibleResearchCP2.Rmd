@@ -1,0 +1,191 @@
+# Influence of severe weather events on public health and economics
+
+## Synopsis
+
+Storms and other severe weather events can cause both public health and economic problems for communities and municipalities. Many severe events can result in fatalities, injuries, and property damage, and preventing such outcomes to the extent possible is a key concern.
+
+This project involves exploring  Furthermore, this document was prepared on the frame of the Peer Assessment 2 Reproducible Research Coursera Course, on 2014/07/27 by MonicaPH.
+
+The effects of weather on public health and economics are examined, especifically the following questions:
+1. Across the United States, which types of events are most harmful with respect to population health?
+2. Across the United States, which types of events have the greatest economic consequences?
+
+The natural disaster that casuses the most Population Health damages are tornados, followed by heat and floods. On the other hand, the events that cause the most economic losses are floods followed by tornados.
+
+## Data
+
+To answer the proposed questions, data from the U.S. National Oceanic and Atmospheric Administration's (NOAA) storm database was used, as downloaded from the [Coursera platform](https://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2). This database tracks characteristics of major storms and weather events in the United States, including when and where they occur, as well as estimates of any fatalities, injuries, and property damage. The raw data come in the form of a comma-separated-value file compressed via the bzip2 algorithm. 
+
+Extra information about the data set can be found at:
+
+- National Weather Service [Storm Data Documentation](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2Fpd01016005curr.pdf)
+- National Climatic Data Center [Storm Events FAQ](https://d396qusza40orc.cloudfront.net/repdata%2Fpeer2_doc%2FNCDC%20Storm%20Events-FAQ%20Page.pdf)
+
+
+## Data Processing
+
+Firts it loads the required libraries. Then instructions are included to download, unzip and read the data:
+
+```{r loading,echo=TRUE}
+#Libraries
+library(plyr)
+library(ggplot2)
+
+
+Sys.setlocale("LC_TIME", "English")       # Set language to engish
+
+#Downloading
+fileurl<-"http://d396qusza40orc.cloudfront.net/repdata%2Fdata%2FStormData.csv.bz2"
+if(!file.exists("StormData.csv.bz2")){
+      download.file(fileurl, destfile="StormData.csv.bz2")
+}
+
+#Reading
+if(file.exists("StormData.csv.bz2")){
+      data <- bzfile("StormData.csv.bz2", "r")
+      stormD <- read.csv(data)
+      close(data)
+}
+
+# Summary of the Data
+summary(stormD)
+```
+
+The dataset has 37 variables describing storms and its consequences. The relevant variables are selected for further analysis, namely:
+1. **BGN_DATE** - Begin date
+2. **BGN_TIME** - Begin time
+3. **EVTYPE** - Type of event
+4. **FATALITIES** - Fatalities to humans caused by the event
+5. **INJURIES** - Injuries to humans caused by the event
+6. **PROPDMG** - Property damage
+7. **PROPDMGEXP** - Order of the property damage
+8. **CROPDMG** - Crop damage
+9. **CROPDMGEXP** - Order of the crop damage
+
+```{r subsetting,echo=TRUE}
+# Getting the relevant columns
+stormDs <- stormD[,c("BGN_DATE","BGN_TIME","EVTYPE","FATALITIES","INJURIES","PROPDMG","PROPDMGEXP","CROPDMG","CROPDMGEXP")]
+
+# Formatting Date and Time together
+stormDs[,10] <- paste(substr(stormDs[,1],1,10),stormDs[,2])
+stormDs[,1] <- data.frame(strptime(stormDs[,10], format="%m/%d/%Y %H%M"))[,1]
+stormDs <- stormDs[,c("BGN_DATE","EVTYPE","FATALITIES","INJURIES","PROPDMG","PROPDMGEXP","CROPDMG","CROPDMGEXP")]
+
+```
+
+The orders of magnitude are coded, therefore, they need to be translated and grouped into a single magnitude variable
+```{r orderMagnitude,echo=TRUE}
+# Check Unique order levels property damage
+summary(stormDs[,6])
+
+# Replace order of magnitude by numbers 
+levels(stormDs[,6])<-c("","-","?","+","0","1","2","3","4","5","6","7","8","9","B","h","H","K","m","M")
+stormDs[stormDs[,6]=="-"|stormDs[,6]=="?"|stormDs[,6]=="+"|stormDs[,6]=="",6] <- "1"
+stormDs[stormDs[,6]=="h"|stormDs[,6]=="H",6] <- "2"
+stormDs[stormDs[,6]=="K",6] <- "3"
+stormDs[stormDs[,6]=="m"|stormDs[,6]=="M",6] <- "6"
+stormDs[stormDs[,6]=="B",6] <- "9"
+summary(stormDs[,6])
+# transforming the magnitude to integer
+stormDs[,6]<-as.integer(stormDs[,6])
+
+
+# Check unique order levels crop damage
+summary(stormDs[,8])
+# Replace order of magnitude by numbers 
+levels(stormDs[,8])<-c("","-","?","+","0","1","2","3","4","5","6","7","8","9","B","h","H","K","m","M")
+stormDs[stormDs[,8]=="?"|stormDs[,6]=="",8] <- "1"
+stormDs[stormDs[,8]=="h"|stormDs[,8]=="H",8] <- "2"
+stormDs[stormDs[,8]=="k"|stormDs[,8]=="K",8] <- "3"
+stormDs[stormDs[,8]=="m"|stormDs[,8]=="M",8] <- "6"
+stormDs[stormDs[,8]=="B",8] <- "9"
+summary(stormDs[,8])
+# transforming the magnitude to integer
+stormDs[,8]<-as.integer(stormDs[,8])
+
+#Multiply magnitude by order of magnitude
+stormDs[,9] <- stormDs[,5] * 10^stormDs[,6]
+stormDs[,10] <- stormDs[,7] * 10^stormDs[,8]
+names(stormDs)[9:10] <- c("PROPERTYDAMAGE","CROPDAMAGE")
+
+#Subsetting
+stormDs <- stormDs[,c("BGN_DATE","EVTYPE","FATALITIES","INJURIES","PROPERTYDAMAGE","CROPDAMAGE")]
+
+```
+
+There are several types of storm events. For this study, these will be grouped in:
+
+1. EROSION
+2. FLOOD
+3. LIGHTNING (includes thunder)
+4. RAIN
+5. BLIZZARD (includes snow, freeze, cold, ice)
+6. HEAT
+7. RAIN
+8. TSUNAMI (includes tide)
+9. AVALANCHE
+10. VULCANIC
+11. HEAT
+12. TORNADO (includes hurricane, wind)
+
+
+```{r relabeling,echo=TRUE}
+stormDs[grepl("EROSION",stormDs$EVTYPE),7] <- "EROSION"
+stormDs[grepl("FLOOD",stormDs$EVTYPE),7] <- "FLOOD"
+stormDs[grepl("LIGHTNING|THUNDER",stormDs$EVTYPE),7] <- "LIGHTNING"
+stormDs[grepl("RAIN",stormDs$EVTYPE),7] <- "RAIN"
+stormDs[grepl("BLIZZARD|SNOW|FREEZE|COLD|ICE",stormDs$EVTYPE),2] <- "BLIZZARD"
+stormDs[grepl("HEAT",stormDs$EVTYPE),7] <- "HEAT"
+stormDs[grepl("RAIN",stormDs$EVTYPE),7] <- "RAIN"
+stormDs[grepl("TSUNAMI|TIDE",stormDs$EVTYPE),7] <- "TSUNAMI"
+stormDs[grepl("AVALANCHE",stormDs$EVTYPE),7] <- "AVALANCHE"
+stormDs[grepl("VULCANIC",stormDs$EVTYPE),7] <- "VULCANIC"
+stormDs[grepl("HEAT",stormDs$EVTYPE),7] <- "HEAT"
+stormDs[grepl("TORNADO|HURRICANE|WIND",stormDs$EVTYPE),7] <- "TORNADO"
+
+names(stormDs)[7] <- "Event_type"
+stormDs <- stormDs[,c("BGN_DATE","FATALITIES","INJURIES","PROPERTYDAMAGE","CROPDAMAGE","Event_type")]
+
+```
+
+To have a single measure of population health and economic consecuences, fatalities is aggregated with injuries, and property damage with crop damage:
+
+```{r aggregating,echo=TRUE}
+
+stormDs[,7] <- stormDs$FATALITIES + stormDs$INJURIES
+stormDs[,8] <- stormDs$PROPERTYDAMAGE + stormDs$CROPDAMAGE
+
+names(stormDs)[7:8] <- c("Population_health","Economic_consequences")
+
+stormDs <- stormDs[,c("BGN_DATE","Event_type","Population_health","Economic_consequences")]
+
+```
+
+Calculating the total amount of damages, both for Population Health and Economic Consequences
+
+```{r total,echo=TRUE}
+# Population_health
+stormDsAccPH <- aggregate(Population_health ~ Event_type, stormDs, sum)
+
+# Economic_consequences
+stormDsAccEC <- aggregate(Economic_consequences ~ Event_type, stormDs, sum)
+
+```
+
+## Results
+
+To visualize better the results, here is a plot of the damages per event type:
+
+```{r plots,echo=TRUE}
+# Population_health
+g <- ggplot(stormDsAccPH, aes(x=Event_type,y=Population_health)) 
+g + geom_point(color = "steelblue",size = 4, alpha = 1) + ggtitle("Total Population Health damages per storm type") 
+
+# Economic_consequences
+g2 <- ggplot(stormDsAccEC, aes(x=Event_type,y=Economic_consequences)) 
+g2 + geom_point(color = "blue",size = 4, alpha = 0.8) + ggtitle("Total Population Economic Consequences per storm type") 
+
+```
+
+As we can see, the natural disaster that casuses the most Population Health damages are tornados, followed by heat and floods. On the other hand, the events that cause the most economic losses are floods followed by tornados.
+

@@ -1,6 +1,6 @@
-RepRes_PA2
+Readme (.md)
 ==========
 
 This repository includes the knited report for the Peer Assessment 2 of Reproducible Research.
 
-If the PDF "ReproducibleResearchCP2" is not available in the coursera platform, please check it here.
+Please check the ReproducibleResearchCP2.pdf file for the full report.
